@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-
 	"strconv"
 	"strings"
 	"sync"
@@ -144,6 +143,9 @@ type Client struct {
 	// be set to a number higher than your peak parallel requests.
 	MaxIdleConns int
 
+	// Alternative to net.DialTimeout to make server connections
+	DialTimeout func(network, address string, timeout time.Duration) (net.Conn, error)
+
 	selector ServerSelector
 
 	lk       sync.Mutex
@@ -255,12 +257,12 @@ func (cte *ConnectTimeoutError) Error() string {
 }
 
 func (c *Client) dial(addr net.Addr) (net.Conn, error) {
-	type connError struct {
-		cn  net.Conn
-		err error
-	}
 
-	nc, err := net.DialTimeout(addr.Network(), addr.String(), c.netTimeout())
+	dialTimeout := c.DialTimeout
+	if dialTimeout == nil {
+		dialTimeout = net.DialTimeout
+	}
+	nc, err := dialTimeout(addr.Network(), addr.String(), c.netTimeout())
 	if err == nil {
 		return nc, nil
 	}
